@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use crate::error::BindgenResult;
 use crate::DojoData;
 
+pub mod bevy;
 pub mod typescript;
 pub mod typescript_v2;
 pub mod unity;
@@ -16,6 +17,7 @@ pub enum BuiltinPlugins {
     Typescript,
     Unity,
     TypeScriptV2,
+    Bevy,
 }
 
 impl fmt::Display for BuiltinPlugins {
@@ -24,6 +26,7 @@ impl fmt::Display for BuiltinPlugins {
             BuiltinPlugins::Typescript => write!(f, "typescript"),
             BuiltinPlugins::Unity => write!(f, "unity"),
             BuiltinPlugins::TypeScriptV2 => write!(f, "typescript_v2"),
+            BuiltinPlugins::Bevy => write!(f, "bevy"),
         }
     }
 }

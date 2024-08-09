@@ -33,6 +33,10 @@ pub struct BuildArgs {
     pub unity: bool,
 
     #[arg(long)]
+    #[arg(help = "Generate Bevy bindings.")]
+    pub bevy: bool,
+
+    #[arg(long)]
     #[arg(help = "Output directory.", default_value = "bindings")]
     pub bindings_output: String,
 
@@ -93,6 +97,10 @@ impl BuildArgs {
 
         if self.unity {
             builtin_plugins.push(BuiltinPlugins::Unity);
+        }
+
+        if self.bevy {
+            builtin_plugins.push(BuiltinPlugins::Bevy);
         }
 
         if self.stats {
@@ -159,6 +167,7 @@ impl Default for BuildArgs {
             typescript: false,
             typescript_v2: false,
             unity: false,
+            bevy: false,
             bindings_output: "bindings".to_string(),
             stats: false,
             packages: None,
