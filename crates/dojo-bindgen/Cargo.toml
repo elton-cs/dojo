@@ -22,6 +22,7 @@ thiserror.workspace = true
 
 cainome.workspace = true
 dojo-world = { path = "../dojo-world", features = [ "manifest" ] }
+proc-macro2 = "1.0.86"
 
 [dev-dependencies]
 assert_matches.workspace = true
