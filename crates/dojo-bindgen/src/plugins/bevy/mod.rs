@@ -1,11 +1,12 @@
 use async_trait::async_trait;
 use cainome::parser::tokens::{
-    Composite, CompositeType, CoreBasic, Function, FunctionOutputKind, Token,
+    Composite, CompositeInner, CompositeType, CoreBasic, Function, FunctionOutputKind, Token,
 };
 use cainome::rs::{CairoEnum, CairoStruct};
 use dojo_world::contracts::naming::{self, get_namespace_from_tag};
 use proc_macro2::TokenStream as TokenStream2;
 use std::collections::HashMap;
+use std::ops::Index;
 use std::path::{Path, PathBuf};
 
 use crate::error::BindgenResult;
@@ -68,40 +69,18 @@ impl BevyPlugin {
 
                 for (index, struct_field) in composite.inners.iter().enumerate() {
                     match &struct_field.token {
-                        Token::CoreBasic(x) => {
-                            let field_name = struct_field.name.clone();
-                            let field_type = struct_field.token.type_name();
-                            // fields += format!("pub {}: {}, \n", e.name, e.token.type_name()).as_str();
-                            fields += format!("let {}: {};\n", field_name, field_type).as_str();
+                        Token::CoreBasic(_) => {
+                            fields += format!(
+                                "let {}: {};\n",
+                                struct_field.name,
+                                struct_field.token.type_name()
+                            )
+                            .as_str();
+                            fields += BevyPlugin::gen_primitive_string(struct_field).as_str();
 
-                            let primitive_string: String = match struct_field
-                                .token
-                                .type_name()
-                                .as_str()
-                            {
-                                "ContractAddress" => {
-                                    format!(
-                                    "{field_name} = ContractAddress::from(model.children[{index}].ty.as_primitive().unwrap().as_contract_address().unwrap());"
-                                )
-                                }
-                                "u8" => {
-                                    format!(
-                                    "{field_name} = model.children[{index}].ty.as_primitive().unwrap().as_u8().unwrap();"
-                                )
-                                }
-                                "bool" => {
-                                    format!(
-                                    "{field_name} = model.children[{index}].ty.as_primitive().unwrap().as_bool().unwrap();"
-                                )
-                                }
-                                _ => "unknown type".to_string(),
-                            };
-                            all_fields.push(field_name);
-                            fields += primitive_string.as_str();
+                            all_fields.push(struct_field.name.clone());
                         }
-                        _ => {
-                            // fields += format!("pub unknown: unknown_type, \n").as_str();
-                        }
+                        _ => {}
                     }
                 }
                 let full_string = all_fields.join(", ");
@@ -133,6 +112,26 @@ impl BevyPlugin {
         });
 
         out
+    }
+
+    fn gen_primitive_string(struct_field: &CompositeInner) -> String {
+        let field_name = struct_field.name.clone();
+        let index = struct_field.index;
+
+        let primitive_string = match struct_field.token.type_name().as_str() {
+            "ContractAddress" => {
+                format!("{field_name} = ContractAddress::from(model.children[{index}].ty.as_primitive().unwrap().as_contract_address().unwrap());")
+            }
+            "u8" => {
+                format!("{field_name} = model.children[{index}].ty.as_primitive().unwrap().as_u8().unwrap();")
+            }
+            "bool" => {
+                format!("{field_name} = model.children[{index}].ty.as_primitive().unwrap().as_bool().unwrap();")
+            }
+            _ => "unknown type".to_string(),
+        };
+
+        primitive_string
     }
 }
 
