@@ -1,5 +1,7 @@
 use async_trait::async_trait;
-use cainome::parser::tokens::{Composite, CompositeType, Function, FunctionOutputKind, Token};
+use cainome::parser::tokens::{
+    Composite, CompositeType, CoreBasic, Function, FunctionOutputKind, Token,
+};
 use cainome::rs::{CairoEnum, CairoStruct};
 use dojo_world::contracts::naming::{self, get_namespace_from_tag};
 use proc_macro2::TokenStream as TokenStream2;
@@ -26,7 +28,13 @@ impl BevyPlugin {
     }
 
     fn generate_bevy_imports() -> String {
-        "use bevy::prelude::*;\n".to_string()
+        let mut code = String::new();
+        code += "use bevy::prelude::*;\n";
+        code += "use cainome::cairo_serde::ContractAddress;\n";
+        code += "use dojo_types::schema::Struct as DojoStruct;\n";
+        code += "use torii_grpc::types::schema::Entity as DojoEntity;\n";
+
+        code
     }
 
     fn handle_components(
@@ -38,15 +46,50 @@ impl BevyPlugin {
 
         out += BevyPlugin::generate_bindgen_warning().as_str();
         out += BevyPlugin::generate_bevy_imports().as_str();
+        // let tag = &model.tag;
 
-        let tag = &model.tag;
+        let custom_trait = "pub trait ToriiToBevy<T> {
+    fn dojo_model_to_bevy_component(model: &DojoStruct) -> T;
+}\n";
+
+        out += custom_trait;
 
         let mut token_stream: Vec<TokenStream2> = vec![];
-        let derives = vec!["Debug".to_string(), "Component".to_string()];
+        let derives = vec![
+            "Component".to_string(),
+            "Debug".to_string(),
+            // "Clone".to_string(),
+            // "Copy".to_string(),
+        ];
         for token in &model.tokens.structs {
             let composite = token.to_composite().expect("composite expected");
             token_stream.push(CairoStruct::expand_decl(composite, &derives));
             token_stream.push(CairoStruct::expand_impl(composite));
+
+            let mut fields = String::from("");
+            for e in &composite.inners {
+                match &e.token {
+                    Token::CoreBasic(x) => {
+                        // fields += format!("pub {}: {}, \n", e.name, e.token.type_name()).as_str();
+                        fields += format!("let {}: {};\n", e.name, e.token.type_name()).as_str();
+                    }
+                    _ => {
+                        // fields += format!("pub unknown: unknown_type, \n").as_str();
+                    }
+                }
+            }
+
+            let custom_struct_impl = format!(
+                "impl ToriiEntity for {} {{
+    fn dojo_model_to_bevy_component(model: &DojoStruct) -> {} {{
+            {}\n
+            }}
+            }}\n",
+                composite.type_name(),
+                composite.type_name(),
+                fields,
+            );
+            token_stream.push(custom_struct_impl.parse().unwrap());
         }
 
         for token in &model.tokens.enums {
