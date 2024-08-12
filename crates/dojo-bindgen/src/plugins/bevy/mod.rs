@@ -32,7 +32,6 @@ impl BevyPlugin {
         code += "use bevy::prelude::*;\n";
         code += "use cainome::cairo_serde::ContractAddress;\n";
         code += "use dojo_types::schema::Struct as DojoStruct;\n";
-        code += "use torii_grpc::types::schema::Entity as DojoEntity;\n";
 
         code
     }
@@ -55,74 +54,72 @@ impl BevyPlugin {
         out += custom_trait;
 
         let mut token_stream: Vec<TokenStream2> = vec![];
-        let derives = vec![
-            "Component".to_string(),
-            "Debug".to_string(),
-            // "Clone".to_string(),
-            // "Copy".to_string(),
-        ];
+        let derives = vec!["Component".to_string(), "Debug".to_string()];
+
         for token in &model.tokens.structs {
             let composite = token.to_composite().expect("composite expected");
             token_stream.push(CairoStruct::expand_decl(composite, &derives));
             token_stream.push(CairoStruct::expand_impl(composite));
 
-            let mut fields = String::from("");
-            let composite_struct_name = composite.type_name();
-            let mut all_fields: Vec<String> = vec![];
+            if token.type_name() == naming::get_name_from_tag(&model.tag) {
+                let mut fields = String::from("");
+                let composite_struct_name = composite.type_name();
+                let mut all_fields: Vec<String> = vec![];
 
-            for (index, struct_field) in composite.inners.iter().enumerate() {
-                match &struct_field.token {
-                    Token::CoreBasic(x) => {
-                        let field_name = struct_field.name.clone();
-                        let field_type = struct_field.token.type_name();
-                        // fields += format!("pub {}: {}, \n", e.name, e.token.type_name()).as_str();
-                        fields += format!("let {}: {};\n", field_name, field_type).as_str();
+                for (index, struct_field) in composite.inners.iter().enumerate() {
+                    match &struct_field.token {
+                        Token::CoreBasic(x) => {
+                            let field_name = struct_field.name.clone();
+                            let field_type = struct_field.token.type_name();
+                            // fields += format!("pub {}: {}, \n", e.name, e.token.type_name()).as_str();
+                            fields += format!("let {}: {};\n", field_name, field_type).as_str();
 
-                        match struct_field.token.type_name().as_str() {
-                            "ContractAddress" => {
-                                fields += format!(
+                            let primitive_string: String = match struct_field
+                                .token
+                                .type_name()
+                                .as_str()
+                            {
+                                "ContractAddress" => {
+                                    format!(
                                     "{field_name} = ContractAddress::from(model.children[{index}].ty.as_primitive().unwrap().as_contract_address().unwrap());"
                                 )
-                                .as_str();
-                                all_fields.push(field_name);
-                            }
-                            "u8" => {
-                                fields += format!(
+                                }
+                                "u8" => {
+                                    format!(
                                     "{field_name} = model.children[{index}].ty.as_primitive().unwrap().as_u8().unwrap();"
                                 )
-                                .as_str();
-                                all_fields.push(field_name);
-                            }
-                            "bool" => {
-                                fields += format!(
+                                }
+                                "bool" => {
+                                    format!(
                                     "{field_name} = model.children[{index}].ty.as_primitive().unwrap().as_bool().unwrap();"
                                 )
-                                .as_str();
-                                all_fields.push(field_name);
-                            }
-                            _ => {}
+                                }
+                                _ => "unknown type".to_string(),
+                            };
+                            all_fields.push(field_name);
+                            fields += primitive_string.as_str();
+                        }
+                        _ => {
+                            // fields += format!("pub unknown: unknown_type, \n").as_str();
                         }
                     }
-                    _ => {
-                        // fields += format!("pub unknown: unknown_type, \n").as_str();
-                    }
                 }
-            }
-            let full_string = all_fields.join(", ");
-            fields += format!("{composite_struct_name} {{ {} }}", full_string).as_str();
+                let full_string = all_fields.join(", ");
+                fields += format!("{composite_struct_name} {{ {} }}", full_string).as_str();
 
-            let custom_struct_impl = format!(
-                "impl ToriiToBevy<{}> for {} {{
+                let custom_struct_impl = format!(
+                    "impl ToriiToBevy<{}> for {} {{
     fn dojo_model_to_bevy_component(model: &DojoStruct) -> {} {{
             {}\n
             }}
             }}\n",
-                composite.type_name(),
-                composite.type_name(),
-                composite.type_name(),
-                fields,
-            );
-            token_stream.push(custom_struct_impl.parse().unwrap());
+                    composite.type_name(),
+                    composite.type_name(),
+                    composite.type_name(),
+                    fields,
+                );
+                token_stream.push(custom_struct_impl.parse().unwrap());
+            }
         }
 
         for token in &model.tokens.enums {
