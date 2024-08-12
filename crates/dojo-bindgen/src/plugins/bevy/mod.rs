@@ -67,24 +67,57 @@ impl BevyPlugin {
             token_stream.push(CairoStruct::expand_impl(composite));
 
             let mut fields = String::from("");
-            for e in &composite.inners {
-                match &e.token {
+            let composite_struct_name = composite.type_name();
+            let mut all_fields: Vec<String> = vec![];
+
+            for (index, struct_field) in composite.inners.iter().enumerate() {
+                match &struct_field.token {
                     Token::CoreBasic(x) => {
+                        let field_name = struct_field.name.clone();
+                        let field_type = struct_field.token.type_name();
                         // fields += format!("pub {}: {}, \n", e.name, e.token.type_name()).as_str();
-                        fields += format!("let {}: {};\n", e.name, e.token.type_name()).as_str();
+                        fields += format!("let {}: {};\n", field_name, field_type).as_str();
+
+                        match struct_field.token.type_name().as_str() {
+                            "ContractAddress" => {
+                                fields += format!(
+                                    "{field_name} = ContractAddress::from(model.children[{index}].ty.as_primitive().unwrap().as_contract_address().unwrap());"
+                                )
+                                .as_str();
+                                all_fields.push(field_name);
+                            }
+                            "u8" => {
+                                fields += format!(
+                                    "{field_name} = model.children[{index}].ty.as_primitive().unwrap().as_u8().unwrap();"
+                                )
+                                .as_str();
+                                all_fields.push(field_name);
+                            }
+                            "bool" => {
+                                fields += format!(
+                                    "{field_name} = model.children[{index}].ty.as_primitive().unwrap().as_bool().unwrap();"
+                                )
+                                .as_str();
+                                all_fields.push(field_name);
+                            }
+                            _ => {}
+                        }
                     }
                     _ => {
                         // fields += format!("pub unknown: unknown_type, \n").as_str();
                     }
                 }
             }
+            let full_string = all_fields.join(", ");
+            fields += format!("{composite_struct_name} {{ {} }}", full_string).as_str();
 
             let custom_struct_impl = format!(
-                "impl ToriiEntity for {} {{
+                "impl ToriiToBevy<{}> for {} {{
     fn dojo_model_to_bevy_component(model: &DojoStruct) -> {} {{
             {}\n
             }}
             }}\n",
+                composite.type_name(),
                 composite.type_name(),
                 composite.type_name(),
                 fields,
